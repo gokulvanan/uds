@@ -16,7 +16,7 @@ import java.io.*;
 
 // Class that has nothing but a main.
 // Does a Put, Get and a Scan against an hbase table.
-public class GenBidLS {
+public class GenShopWindowTS {
 
   public static void main(String[] args) throws IOException 
   {
@@ -33,52 +33,43 @@ public class GenBidLS {
     */
 
     Scan s = new Scan();
-    s.addColumn(Bytes.toBytes("r"), Bytes.toBytes("rtbjson"));
-    s.addColumn(Bytes.toBytes("r"), Bytes.toBytes("minprocjson"));
-    s.addColumn(Bytes.toBytes("m"), Bytes.toBytes("bidls"));
+    s.addColumn(Bytes.toBytes("r"), Bytes.toBytes("dcojson"));
+    //s.addColumn(Bytes.toBytes("m"), Bytes.toBytes("shw"));
     ResultScanner scanner = table.getScanner(s);
     try 
     {
+        int rownum=0;
         HashMap<String,StatsCounter> overallBidLs=null;
         for (Result r : scanner) 
         {
             //System.out.println("Row-->"+Bytes.toString(r.getRow()));
-            //Iterate over all rows which have these two log entries for which bidls has not been 
+            //Iterate over all rows which have dco entries and generate shopping window ts 
             //generated
-            if(r.containsColumn(Bytes.toBytes("r"),Bytes.toBytes("minprocjson")) &&
-                r.containsColumn(Bytes.toBytes("r"),Bytes.toBytes("rtbjson")) &&
-                !r.containsColumn(Bytes.toBytes("m"),Bytes.toBytes("bidls")))
+            if(r.containsColumn(Bytes.toBytes("r"),Bytes.toBytes("dcojson")))
             {
-                byte [] minprocJson = r.getValue(Bytes.toBytes("r"),Bytes.toBytes("minprocjson"));
-                byte [] rtbJson = r.getValue(Bytes.toBytes("r"),Bytes.toBytes("rtbjson"));
-                if(rtbJson!=null && minprocJson!=null)
+                byte [] dcojson = r.getValue(Bytes.toBytes("r"),Bytes.toBytes("dcojson"));
+                if(dcojson!=null)
                 {
-                    //overallBidLs=MinprocParser.getBidLandScapeObject(minprocJson,rtbJson,overallBidLs);
-                    String bidLs=MinprocParser.getBidLandScapeAsJsonString(minprocJson,rtbJson);
-                    if(bidLs!=null && !bidLs.isEmpty())
+                    System.out.println("Processing "+ Bytes.toString(r.getRow()));
+                    String shw=DcoParser.getShoppingWindowAsJson(dcojson);
+                    if(shw!=null && !shw.isEmpty())
                     {
                         Put p = new Put(r.getRow());
-                        p.add(Bytes.toBytes("m"), Bytes.toBytes("bidls"),Bytes.toBytes(bidLs));
+                        p.add(Bytes.toBytes("m"), Bytes.toBytes("shw"),Bytes.toBytes(shw));
                         table.put(p);
+                        rownum++;
+                        System.out.println(Bytes.toString(r.getRow())+" : "+ shw);
                     }else
                     {
-                        System.out.println(Bytes.toString(r.getRow())+" bidls is empty");
+                        System.out.println(Bytes.toString(r.getRow())+" shw is empty");
                     }
-                    System.out.println(Bytes.toString(r.getRow()));
                 }else
                 {
-                    System.out.println(Bytes.toString(r.getRow())+" rtbJson or minprocJson is null");
+                    System.out.println(Bytes.toString(r.getRow())+" dcojson is null");
                 }
             }
         }
-        if(overallBidLs!=null)
-        {
-            String overallRow=new String("alluid");
-            Put p = new Put(Bytes.toBytes(overallRow));
-            p.add(Bytes.toBytes("m"), Bytes.toBytes("bidls"),
-                Bytes.toBytes(MinprocParser.getBidLandScapeAsJsonString(overallBidLs)));
-            table.put(p);
-        }
+        System.out.println("Generated "+rownum+" shoppingWindow");
     }finally 
     {
       // Make sure you close your scanners when you are done!

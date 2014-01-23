@@ -81,7 +81,89 @@ public class RtbParser
             int clicks= record.path("clicks").getIntValue();
             int imps= record.path("impressions").getIntValue();
             int conversions= record.path("conversions").getIntValue();
-            DecimalFormat df = new DecimalFormat("0.0000000");
+            DecimalFormat df = new DecimalFormat("0.00000");
+            String winningBidPrice=advId+":"+df.format(record.path("winningBidPrice").getDoubleValue()/1000);
+            URIDCounter uc=procMap.get(urId);
+            if(uc!=null)
+            {
+                uc.setWinningBidPrice(winningBidPrice);
+                uc.addClicks(clicks);
+                uc.addImps(imps);
+                uc.addConvs(clicks);
+            }
+        }
+        return procMap;
+    }
+
+    public static HashMap getAuctionHistogram(byte[] rtbData ,List<Integer> tshwhr,
+        List<ShoppingWindow> shwl, HashMap<String,URIDCounter> procMap)
+    {
+        try
+        {
+            CharsetDecoder utf8Decoder = Charset.forName("UTF-8").newDecoder();
+            String rtbJsonData=utf8Decoder.decode(ByteBuffer.wrap(rtbData)).toString();
+            return getAuctionHistogram(rtbJsonData,tshwhr,shwl,procMap);
+        }catch(Exception e)
+        {
+            System.out.println(e.getMessage());
+        }
+        return null;
+    }
+    //Return a histogram of winning auctions within a shopping window
+    public static HashMap getAuctionHistogram(String jsonData,List<Integer> tshwhr,
+        List<ShoppingWindow> shwl, HashMap<String,URIDCounter> procMap)
+    {
+        //create ObjectMapper instance
+        ObjectMapper objectMapper = new ObjectMapper();
+ 
+        JsonNode rootNode ;
+        //read JSON like DOM Parser
+        try
+        {
+            rootNode = objectMapper.readTree(jsonData);
+        }catch(java.io.IOException e)
+        {
+            System.out.println(e.getMessage());
+            return null;
+        }
+
+        Iterator<JsonNode> records=rootNode.getElements(); 
+        while(records.hasNext())
+        {
+            JsonNode record = records.next();
+            JsonNode urIdNode=record.path("uniqueResponseId");
+            String urId=urIdNode.getValueAsText();
+            if(urId.length()<=3)
+            {
+                urId=new String("NAC");
+            }
+            long timeStamp= record.path("timestamp").getLongValue();
+            List<String> segl=ShoppingWindow.getShwSegments(timeStamp,tshwhr,shwl);
+            if(segl==null || segl.size()<=0)
+                continue;
+
+            /*
+            ShoppingWindow shw;
+            boolean withinShw=false;
+            Iterator<ShoppingWindow> shwiter=shwl.iterator();
+            while(shwiter.hasNext())
+            {
+                shw=shwiter.next();
+                if(timeStamp>=shw.start && timeStamp<=shw.end && shw.shwhr<=tshwhr)
+                {
+                    withinShw=true;
+                    break;    
+                }
+            }
+            if(withinShw==false)
+                continue;
+            */
+            //System.out.println("rtb timestamp="+timeStamp);
+            String advId= record.path("advertiserId").getValueAsText();
+            int clicks= record.path("clicks").getIntValue();
+            int imps= record.path("impressions").getIntValue();
+            int conversions= record.path("conversions").getIntValue();
+            DecimalFormat df = new DecimalFormat("0.00000");
             String winningBidPrice=advId+":"+df.format(record.path("winningBidPrice").getDoubleValue()/1000);
             URIDCounter uc=procMap.get(urId);
             if(uc!=null)
