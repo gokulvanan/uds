@@ -126,6 +126,7 @@ public class RtbParser
             System.out.println(e.getMessage());
             return null;
         }
+        String userId=null;
 
         Iterator<JsonNode> records=rootNode.getElements(); 
         while(records.hasNext())
@@ -137,6 +138,9 @@ public class RtbParser
             {
                 urId=new String("NAC");
             }
+            JsonNode userIdNode=record.path("userId");
+            userId =userIdNode.getValueAsText();
+
             long timeStamp= record.path("timestamp").getLongValue();
             List<String> segl=ShoppingWindow.getShwSegments(timeStamp,tshwhr,shwl);
             if(segl==null || segl.size()<=0)
@@ -166,6 +170,11 @@ public class RtbParser
             DecimalFormat df = new DecimalFormat("0.00000");
             String winningBidPrice=advId+":"+df.format(record.path("winningBidPrice").getDoubleValue()/1000);
             URIDCounter uc=procMap.get(urId);
+            if(conversions>1 || clicks>1)
+            {
+                System.out.println(userId+"\t"+urId+"\t"+timeStamp+" Ignoring conv="+conversions+" imps="+imps+" clicks="+clicks);
+                continue;
+            }
             if(uc!=null)
             {
                 uc.setWinningBidPrice(winningBidPrice);

@@ -47,24 +47,23 @@ public class GenAuctionHist {
     Scan s = new Scan();
     s.addColumn(Bytes.toBytes("r"), Bytes.toBytes("rtbjson"));
     s.addColumn(Bytes.toBytes("r"), Bytes.toBytes("minprocjson"));
-    s.addColumn(Bytes.toBytes("m"), Bytes.toBytes("shw"));
-    s.addColumn(Bytes.toBytes("m"), Bytes.toBytes("auctHist"));
+    s.addColumn(Bytes.toBytes("m"), Bytes.toBytes("tshw"));
+    s.addColumn(Bytes.toBytes("m"), Bytes.toBytes("tauctHist"));
     ResultScanner scanner = table.getScanner(s);
     try 
     {
         int rownum=0;
-        HashMap<String,StatsCounter> overallAuctHist=null;
+        HashMap<String,StatsCounter> overallAuctHist=new HashMap<String,StatsCounter>();
         ObjectMapper objectMapper = new ObjectMapper();
 
         //Target segments
         List<Integer>  tshwhr=new ArrayList<Integer>();
         tshwhr.add(1);
+        tshwhr.add(3);
         tshwhr.add(5);
         tshwhr.add(24);
         tshwhr.add(48);
         tshwhr.add(30*24);
-
-        //int tshwhr=30*24;
 
         for (Result r : scanner) 
         {
@@ -73,33 +72,44 @@ public class GenAuctionHist {
             //generated
             if(r.containsColumn(Bytes.toBytes("r"),Bytes.toBytes("rtbjson")) && 
                     r.containsColumn(Bytes.toBytes("r"),Bytes.toBytes("minprocjson")) &&
-                    r.containsColumn(Bytes.toBytes("m"),Bytes.toBytes("shw")))
+                    r.containsColumn(Bytes.toBytes("m"),Bytes.toBytes("tshw")))
             {
+                if(r.containsColumn(Bytes.toBytes("m"),Bytes.toBytes("tauctHist")))
+                {
+                    System.out.println("Skipping "+ Bytes.toString(r.getRow()));
+                    rownum++;
+                    continue;
+                }
                 byte [] rtbjson = r.getValue(Bytes.toBytes("r"),Bytes.toBytes("rtbjson"));
                 byte [] minprocjson = r.getValue(Bytes.toBytes("r"),Bytes.toBytes("minprocjson"));
-                byte [] shwjson = r.getValue(Bytes.toBytes("m"),Bytes.toBytes("shw"));
+                byte [] shwjson = r.getValue(Bytes.toBytes("m"),Bytes.toBytes("tshw"));
                 List<ShoppingWindow> shwl=ShoppingWindow.parseFromJson(shwjson);
 
                 if(shwl!=null && shwl.size()>0 && rtbjson!=null && minprocjson!=null)
                 {
                     System.out.println("Processing "+ Bytes.toString(r.getRow()));
-                    overallAuctHist=MinprocParser.getAuctionHistObject(minprocjson,rtbjson,tshwhr,shwl,overallAuctHist);
-                    String auctHist=MinprocParser.getAuctHistAsJsonString(minprocjson,rtbjson,tshwhr,shwl);
+                    //overallAuctHist=MinprocParser.getAuctionHistObject(minprocjson,rtbjson,tshwhr,shwl,overallAuctHist);
+                    HashMap<String,StatsCounter> auctMap=MinprocParser.getAuctionHistObject(minprocjson,rtbjson,tshwhr,shwl);
+                    String tauctHist=MinprocParser.getAuctHistAsJsonString(auctMap);
 
-                    if(auctHist!=null && auctHist.length()>5) //Some  rudimentary checks on string length
+                    if(tauctHist!=null && tauctHist.length()>5) //Some  rudimentary checks on string length
                     {
+                        //overallAuctHist=MinprocParser.mergeStatsCounter(auctMap,overallAuctHist);
                         Put p = new Put(r.getRow());
-                        p.add(Bytes.toBytes("m"), Bytes.toBytes("auctHist"),Bytes.toBytes(auctHist));
+                        p.add(Bytes.toBytes("m"), Bytes.toBytes("tauctHist"),Bytes.toBytes(tauctHist));
                         table.put(p);
                         rownum++;
-                        System.out.println(Bytes.toString(r.getRow())+"\t"+auctHist);
+                        System.out.println(Bytes.toString(r.getRow())+"\t"+tauctHist);
                         if(rownum%1000==0)
                         {
-                            System.out.println("overalluid\t"+MinprocParser.getAuctHistAsJsonString(overallAuctHist));
+                            //System.out.println("overalluid\t"+rownum+"\t"+MinprocParser.getAuctHistAsJsonString(overallAuctHist));
+                            System.out.println("overalluid\t"+rownum);
+                            //give hints to do GC for every 1000 reads
+                            System.gc();
                         }
                     }else
                     {
-                        System.out.println(Bytes.toString(r.getRow())+" auctHist is empty");
+                        System.out.println(Bytes.toString(r.getRow())+" tauctHist is empty");
                     }
                 }else
                 {
@@ -108,15 +118,17 @@ public class GenAuctionHist {
             }
         }
         System.out.println("Generated "+rownum+" AuctHist");
+        /*
         if(overallAuctHist!=null)
         {
             String overallRow=new String("alluid");
             Put p = new Put(Bytes.toBytes(overallRow));
-            String auctHist=MinprocParser.getAuctHistAsJsonString(overallAuctHist);
-            p.add(Bytes.toBytes("m"), Bytes.toBytes("auctHist"),Bytes.toBytes(auctHist));
+            String tauctHist=MinprocParser.getAuctHistAsJsonString(overallAuctHist);
+            p.add(Bytes.toBytes("m"), Bytes.toBytes("tauctHist"),Bytes.toBytes(tauctHist));
             table.put(p);
-            System.out.println(overallRow+"\t"+auctHist);
+            System.out.println(overallRow+"\t"+tauctHist);
         }
+        */
     }finally 
     {
       // Make sure you close your scanners when you are done!

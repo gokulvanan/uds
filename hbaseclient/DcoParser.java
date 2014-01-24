@@ -3,6 +3,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.ArrayDeque;
 import java.util.Set;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.HashMap;
 import java.util.TimeZone;
@@ -32,7 +33,7 @@ public class DcoParser
 /*
  * {"versionid":0,"countryId":null,"responseTimeInMS":2,"userAgent":"\"Mozilla\/5.0(WindowsNT6.2)AppleWebKit\/537.36(KHTML","cityId":3245,"paramString":"25279","jsonString":"{\"userId\":\"00011718-ff5a-4dc3-82a8-efdcaed8e90b\",\"partnerId\":6006,\"time\":1385401630896,\"msgRcvTime\":null,\"businessVertical\":\"r\",\"userAction\":\"c\",\"skuList\":[\"107486\"],\"keyValueList\":null,\"filters\":null,\"params\":{\"id\":\"107486\",\"f\":\"c\",\"t\":\"r\",\"usertype\":\"00\"}}","partnerId":6006,"pageURL":"null","ip":"likeGecko)Chrome\/31.0.1650.57Safari\/537.36\"","timestamp":1385401630896,"tagType":"IMAGE","pixelType":"HTTP_GET","formatId":null,"referrelURL":"http:\/\/www.myntra.com\/Sports-Sandals\/Puma\/Puma-Women-Techno-II-Black-Sports-Sandals\/107486\/buy?searchQuery=mid-season-sale&serp=4&uq=false","userId":"00011718-ff5a-4dc3-82a8-efdcaed8e90b","action":"c","reqType":"t=r&f=c&id=107486&usertype=00","businessVertical":"r","regionId":219}
 */
-    public static List<Long> getShoppingWindow(File f)
+    public static List<ShoppingWindow> getShoppingWindow(File f)
     {
         byte[] rawData = new byte[(int) f.length()];
         try
@@ -48,7 +49,7 @@ public class DcoParser
         return null;
     }
 
-    public static List<Long> getShoppingWindow(byte[] rawData)
+    public static List<ShoppingWindow> getShoppingWindow(byte[] rawData)
     {
         try
         {
@@ -75,6 +76,7 @@ public class DcoParser
         return dateFormatter.format(d);
     }
 
+
     //This DS returns a map where key is URID and the value is stats object which contains advid:bidprice,clicks,imps,convs and auctions. 
     public static List<ShoppingWindow> getShoppingWindow(String jsonData)
     {
@@ -94,113 +96,140 @@ public class DcoParser
 
         Iterator<JsonNode> records=rootNode.getElements(); 
         String referrelURL=new String();
-        String confirmURL=new String();
-        ArrayDeque<Long> userAction=new ArrayDeque<Long>();
-        ArrayDeque<Long> confirmTS=new ArrayDeque<Long>();
-        //long referrelURLTS=0;
-        //long confirmts=0;
+        ArrayList<ShoppingEvent> events=new ArrayList<ShoppingEvent>();
+        boolean purchased=false;
+
         String userId=new String();
         while(records.hasNext())
         {
+            //System.out.println("Begin of array");
             JsonNode record = records.next();
             //Divide by 1000 to get the unixtimestamp from milliseconds
             long timeStamp=(record.get("timestamp")).getLongValue()/1000; 
             userId=record.get("userId").getValueAsText();
+
             JsonNode referellURLNode=record.path("referrelURL");
+            referrelURL=referellURLNode.getValueAsText();
+            if(referrelURL==null || referrelURL.length()<5)
+            {
+                System.out.println(userId+"\treferrelURL is invalid ");
+                continue;
+            }
+                
             String actionString=record.path("jsonString").getValueAsText();
+            //System.out.println("actionString="+actionString);
             JsonNode actionNode=null;
             try
             {
                 actionNode = objectMapper.readTree(actionString);
-            }catch(java.io.IOException e)
+            }catch(Exception e)
             {
                 System.out.println(e.getMessage());
                 continue;
             }
+
             String action=actionNode.path("userAction").getValueAsText();
+            if(action==null)
+            {
+                //System.out.println(userId+"\tGarbledUserAction UserAction= "+actionString);
+                continue;
+            }
+
             if(action.equalsIgnoreCase("s"))
             {
-                userAction.add(timeStamp);
+                ShoppingEvent e=new ShoppingEvent();
+                e.url=new String(referrelURL);
+                e.ts=timeStamp;
+                e.action=new String("s");
+                events.add(e);
             }
-            rootNode = objectMapper.readTree();
 
-            //System.out.println(referellURLNode.getValueAsText());
-            //if(referrelURLTS==0 && referellURLNode.getValueAsText().matches(".*utm_source.*"))
+            /*
             if(referellURLNode.getValueAsText().matches(".*utm_source.*"))
             {
                 referrelURL=referellURLNode.getValueAsText();
-                referrelURLTS.add(timeStamp);
-            }else if(referellURLNode.getValueAsText().matches(".*confirm.*"))
+            }
+            */
+            if(referrelURL.matches(".*confirm.*"))
             {
-                confirmURL=referellURLNode.getValueAsText();
-                confirmTS.add(timeStamp);
+                ShoppingEvent e=new ShoppingEvent();
+                e.url=new String(referrelURL);
+                e.ts=timeStamp;
+                e.action=new String("p");
+                events.add(e);
+                purchased=true;
             }
         }
-        ArrayList<Long> ret=new ArrayList<Long>();
-        if(referrelURLTS.size()>0 && confirmTS.size()>0)
+
+        if(purchased)
         {
-            
-            Object[] confirmTSA=confirmTS.toArray();
-            Object[] referrelTSA=referrelURLTS.toArray();
-            int i=0,j=0;
-            for(;i<confirmTSA.length;i++)
+            ArrayList<ShoppingWindow> ret=new ArrayList<ShoppingWindow>();
+            Object[] eventA=events.toArray();
+            for(int i=0;i<eventA.length;i++)
             {
-                boolean advancedJ=false;
-                while(j<referrelTSA.length && (Long)confirmTSA[i]>(Long)referrelTSA[j])
+                ShoppingEvent she=(ShoppingEvent)eventA[i];
+                if(she.action.equalsIgnoreCase("p"))  //A purchase event has happened
                 {
-                    j++;
-                    advancedJ=true;
-                }
-                if(advancedJ) 
-                {
-                    if((Long)referrelTSA[j-1]<(Long)confirmTSA[i])
+                    ShoppingEvent pe=(ShoppingEvent)eventA[i];
+                    System.out.println(userId+"\t"+pe.ts+"\t"+pe.url);
+                    //Seek 1st shooping event 30 minutes before purchase
+                    int index=i-1;
+                    while(index>0)
                     {
-                        ret.add((Long)referrelTSA[j-1]);
-                        ret.add((Long)confirmTSA[i]);
+                        ShoppingEvent e=(ShoppingEvent)eventA[index];
+                        if(e.action.equalsIgnoreCase("p"))
+                            break;
+                        else if(e.action.equalsIgnoreCase("s") && (pe.ts-e.ts)>30*60)
+                        {
+                            ShoppingWindow shw=new ShoppingWindow(); 
+                            shw.start=e.ts;
+                            shw.end=pe.ts;
+                            shw.shwhr=1+(int)(shw.end-shw.start)/3600;
+                            ret.add(shw);
+                            System.out.println(userId+"\t"+e.ts+"\t"+e.url);
+                            System.out.println(userId+"\t"+pe.ts+"\t"+pe.url);
+                            break;
+                        }else
+                        {
+                            System.out.println("Ignoring.."+userId+"\t"+pe.ts+"\t"+pe.url);
+                            index--;
+                        }
                     }
-                    System.out.println(userId);
-                    System.out.println(referrelTSA[j-1]+"\t"+referrelURL);
-                    System.out.println(confirmTSA[i]+"\t"+confirmURL);
-                }else if((Long)referrelTSA[j]<(Long)confirmTSA[i]) 
-                {
-                    ret.add((Long)referrelTSA[j]);
-                    ret.add((Long)confirmTSA[i]);
-                    j++;
                 }
             }
-            return ret;
+            if(ret.size()>0)
+                return ret;
         }
         return null;
     }
     public static String getShoppingWindowAsJson(byte[] jsonData)
     {
-        List<Long> shoppingWindow=getShoppingWindow(jsonData);
-        if(shoppingWindow!=null)
-            return convertToJson(shoppingWindow);
+        List<ShoppingWindow> shw=getShoppingWindow(jsonData);
+        if(shw!=null)
+            return convertToJson(shw);
         else
             return null;
     }
 
-    public static String convertToJson(List<Long> ts)
+    public static String convertToJson(List<ShoppingWindow> ts)
     {
         if(ts==null)
             return null;
-        Iterator<Long> tsIter=ts.iterator();
+        Iterator<ShoppingWindow> tsIter=ts.iterator();
         JsonNodeFactory nf=JsonNodeFactory.instance;
-        ArrayNode shw=new ArrayNode(nf);
+        ArrayNode shwnode=new ArrayNode(nf);
         //The data is guarenteed to come in pairs
         while(tsIter.hasNext())
         {
             ObjectNode data=new ObjectNode(nf);
-            Long start=tsIter.next();
-            data.put("start",start);
-            Long end=tsIter.next();
-            data.put("end",end);
-            shw.add(data);
-            Integer shwh=1+(int)(end-start)/3600; //Add one 
-            data.put("shwhr",shwh);
+            ShoppingWindow shw=tsIter.next();
+            //Long start=tsIter.next();
+            data.put("start",shw.start);
+            data.put("end",shw.end);
+            data.put("shwhr",shw.shwhr);
+            shwnode.add(data);
         }
-        return shw.toString();
+        return shwnode.toString();
     }
  
 	public static void main(String[] args) throws JsonParseException, IOException 

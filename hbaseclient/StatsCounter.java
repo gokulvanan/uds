@@ -11,10 +11,10 @@ public class StatsCounter
     public class Stats
     {
         public String mSegment;
-        public int mImps,mClicks,mConvs,mBids,mAucs,mAllConvs;
+        public int mImps,mClicks,mConvs,mBids,mAucs,mAllConvs,mUniques;
         public Stats(String segment)
         {
-            mImps=mClicks=mConvs=mBids=mAucs=mAllConvs=0;
+            mImps=mClicks=mConvs=mBids=mAucs=mAllConvs=mUniques=0;
             mSegment=new String(segment);
         }
         public String toString()
@@ -23,14 +23,14 @@ public class StatsCounter
         }
     }
     //This is overall impressions, clicks, conversions, bids and auctions
-    public int mImps,mClicks,mConvs,mBids,mAucs,mAllConvs;
+    public int mImps,mClicks,mConvs,mBids,mAucs,mAllConvs,mUniques;
     HashMap<String,Stats> mStatsMap;
-    HashMap<Double,Integer> mWinPercent;
-    HashMap<Double,Integer> mBidPercent;
+    public HashMap<Double,Integer> mWinPercent;
+    public HashMap<Double,Integer> mBidPercent;
     public StatsCounter()
     {
         mStatsMap=new HashMap<String,Stats>();
-        mImps=mClicks=mConvs=mBids=mAucs=mAllConvs=0;
+        mImps=mClicks=mConvs=mBids=mAucs=mAllConvs=mUniques=0;
         mWinPercent=new HashMap<Double,Integer>();
         mBidPercent=new HashMap<Double,Integer>();
         mWinPercent.put(new Double(0.0),new Integer(0));    //Count of 0 win percentages
@@ -49,7 +49,7 @@ public class StatsCounter
     }
     public void addWinPercentage(double winPercent,int cnt)
     {
-        System.out.println("win%="+winPercent);
+        //System.out.println("win%="+winPercent);
         Iterator<Double> winIter=mWinPercent.keySet().iterator();
         while(winIter.hasNext())
         {
@@ -64,7 +64,7 @@ public class StatsCounter
     }
     public void addBidPercentage(double bidPercent,int cnt)
     {
-        System.out.println("Bid%="+bidPercent);
+        //System.out.println("Bid%="+bidPercent);
         Iterator<Double> bidIter=mBidPercent.keySet().iterator();
         while(bidIter.hasNext())
         {
@@ -87,6 +87,17 @@ public class StatsCounter
         }
         s.mBids+=cnt;
         mBids+=cnt;
+    }
+    public void addUniques(String segment,int cnt)
+    {
+        Stats s=mStatsMap.get(segment);
+        if(s==null)
+        {
+            s=new Stats(segment);
+            mStatsMap.put(s.mSegment,s);
+        }
+        s.mUniques+=cnt;
+        mUniques+=cnt;
     }
     public void addImps(String segment,int cnt)
     {
@@ -148,6 +159,21 @@ public class StatsCounter
         return mStatsMap.keySet();
     }
 
+    public static StatsCounter fromJson(byte[] rawdata)
+    {
+        String auctJson=null;
+        try
+        {
+            CharsetDecoder utf8Decoder = Charset.forName("UTF-8").newDecoder();
+            String auctJson=utf8Decoder.decode(ByteBuffer.wrap(rawData)).toString();
+            return getAuctionHistogram(minProcJsonData,tshwhr,shwl);
+        }catch(Exception e)
+        {
+            System.out.println(e.getMessage());
+        }
+
+    }
+
     public ObjectNode toJson()
     {
         try
@@ -160,6 +186,7 @@ public class StatsCounter
             all.put("imps",mImps);
             all.put("bids",mBids);
             all.put("aucs",mAucs);
+            all.put("uniques",mUniques);
             ArrayNode winNodes=new ArrayNode(nf);
             Iterator<Double> winIter=mWinPercent.keySet().iterator();
             while(winIter.hasNext())

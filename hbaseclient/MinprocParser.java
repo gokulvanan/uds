@@ -166,6 +166,79 @@ public class MinprocParser
         }
         return bidMap;
     }
+    public static String getBidLandScapeAsJsonString(HashMap<String,StatsCounter> bidMap)
+    {
+        if(bidMap==null)
+            return null;
+        Iterator<String> bidMapKeyIter=bidMap.keySet().iterator();
+        JsonNodeFactory nf=JsonNodeFactory.instance;
+        ArrayNode bidLs=new ArrayNode(nf);
+        while(bidMapKeyIter.hasNext())
+        {
+            String bidPrice=bidMapKeyIter.next();
+            StatsCounter sc=bidMap.get(bidPrice);
+            ObjectNode data=sc.toJson();
+            data.put("advid:bidprice",bidPrice);
+            String s[]=bidPrice.split(":");
+            data.put("advid",s[0]);
+            data.put("bidprice",s[1]);
+            bidLs.add(data);
+        }
+        return bidLs.toString();
+    }
+    public static String getBidLandScapeAsJsonString(byte[] minproc,byte[] rtb)
+    {
+        HashMap<String,URIDCounter> procMap=MinprocParser.getAdvIdAndBids(minproc);
+        HashMap<String,URIDCounter> userLs=RtbParser.getAdvIdAndBids(rtb,procMap);
+        if(procMap==null || userLs==null)
+        {
+            return "";
+        }
+
+        HashMap<String,StatsCounter> bidMap=new HashMap<String,StatsCounter>();
+        Iterator<String> keyIter=userLs.keySet().iterator();
+        while(keyIter.hasNext())
+        {
+            String key=keyIter.next();
+            URIDCounter uc=userLs.get(key);
+            //System.out.println(key+"..>"+uc.toString());
+            String bidString=((uc.getWinningBidPrice()==null)?uc.getBidPrice():uc.getWinningBidPrice());
+            /*
+            if(uc.getWinningBidPrice()!=null)
+            {
+                System.out.println("BidPrice="+uc.getBidPrice()+" WinPrice="+uc.getWinningBidPrice());
+            }
+            */
+            StatsCounter sc=bidMap.get(bidString);
+            if(sc==null)
+            {
+                sc=new StatsCounter();
+                bidMap.put(bidString,sc);
+            }
+            String segment=String.valueOf(uc.getDayPart());
+            sc.addAucs(segment,uc.getAucs());
+            sc.addImps(segment,uc.getImps());
+            sc.addClicks(segment,uc.getClicks());
+            sc.addConvs(segment,uc.getConvs());
+            sc.addBids(segment,uc.getBids());
+            //System.out.println(key+"..>"+c.toString());
+        }
+        Iterator<String> bidMapKeyIter=bidMap.keySet().iterator();
+        JsonNodeFactory nf=JsonNodeFactory.instance;
+        ArrayNode bidLs=new ArrayNode(nf);
+        while(bidMapKeyIter.hasNext())
+        {
+            String bidPrice=bidMapKeyIter.next();
+            StatsCounter sc=bidMap.get(bidPrice);
+            ObjectNode data=sc.toJson();
+            data.put("advid:bidprice",bidPrice);
+            String s[]=bidPrice.split(":");
+            data.put("advid",s[0]);
+            data.put("bidprice",s[1]);
+            bidLs.add(data);
+        }
+        return bidLs.toString();
+    }
 
     public static HashMap getAuctionHistogram(File f, List<Integer> tshwhr,List<ShoppingWindow> shwl)
     {
@@ -290,15 +363,13 @@ public class MinprocParser
     }
 
     public static HashMap getAuctionHistObject(byte[] minproc,byte[] rtb, List<Integer> tshwhr,
-        List<ShoppingWindow> shwl,HashMap<String,StatsCounter> auctMap)
+        List<ShoppingWindow> shwl)
     {
         HashMap<String,URIDCounter> procMap=MinprocParser.getAuctionHistogram(minproc,tshwhr,shwl);
         HashMap<String,URIDCounter> userLs=RtbParser.getAuctionHistogram(rtb,tshwhr,shwl,procMap);
-        if(auctMap==null)
-        {
-            auctMap=new HashMap<String,StatsCounter>();
-        }
-        if(procMap==null || userLs==null)
+        HashMap<String,StatsCounter> auctMap=new HashMap<String,StatsCounter>();
+        //System.out.println("procMapSize="+procMap.size()+"\tuserLs="+userLs.size());
+        if(procMap==null || userLs==null )
         {
             System.out.println("procMap or userLs is null");
             return auctMap;
@@ -337,23 +408,27 @@ public class MinprocParser
                 sc.addClicks(segment,uc.getClicks());
                 sc.addConvs(segment,uc.getConvs());
                 sc.addBids(segment,uc.getBids());
-                sc.addWinPercentage(uc.getWinPercent(),1);
-                sc.addBidPercentage(uc.getBidPercent(),1);
             }
             //System.out.println(key+"..>"+c.toString());
         }
-        //Add All conversions
+        //Add All conversions and uniques
         Iterator<String> auctMapIter=auctMap.keySet().iterator();
         while(auctMapIter.hasNext())
         {
             String segment=auctMapIter.next();
+            StatsCounter sc=auctMap.get(segment);
+            double winPercent=(double)sc.mImps/(double)sc.mBids;
+            double bidPercent=(double)sc.mBids/(double)sc.mAucs;
+            sc.addWinPercentage(winPercent,1);
+            sc.addBidPercentage(bidPercent,1);
+            sc.addUniques(segment,1);
             Iterator<ShoppingWindow> shwlIter=shwl.iterator();
             while(shwlIter.hasNext())
             {
                 ShoppingWindow shw=shwlIter.next();
                 if(shw.shwhr<=Integer.parseInt(segment))
                 {
-                    StatsCounter sc=auctMap.get(segment);
+                    sc=auctMap.get(segment);
                     sc.addAllConvs(segment,1);
                 }
             }
@@ -361,60 +436,48 @@ public class MinprocParser
         return auctMap;
     }
 
+    //Merge two stats counter objects. Modifies m2 
 
-    public static String getAuctHistAsJsonString(byte[] minproc,byte[] rtb, List<Integer> tshwhr,
-        List<ShoppingWindow> shwl)
+    public static HashMap mergeStatsCounter(HashMap<String,StatsCounter> m1,HashMap<String,StatsCounter> m2)
     {
-        HashMap<String,URIDCounter> procMap=MinprocParser.getAuctionHistogram(minproc,tshwhr,shwl);
-        HashMap<String,URIDCounter> userLs=RtbParser.getAuctionHistogram(rtb,tshwhr,shwl,procMap);
-        HashMap<String,StatsCounter> auctMap=new HashMap<String,StatsCounter>();
-        if(procMap==null || userLs==null)
+        Iterator<String> m1Iter=m1.keySet().iterator();
+        while(m1Iter.hasNext())
         {
-            return "";
-        }
-        Iterator<String> keyIter=userLs.keySet().iterator();
-        while(keyIter.hasNext())
-        {
-            String key=keyIter.next();
-            URIDCounter uc=userLs.get(key);
-            List<String> segl=uc.getSegments();
-            Iterator<String> segIter=segl.iterator();
-            while(segIter.hasNext())
+            String m1Key=m1Iter.next();            
+            StatsCounter m1Sc=m1.get(m1Key);
+            StatsCounter sc=null;
+            if(m2.containsKey(m1Key))
             {
-                String shwInHr=segIter.next();
-                StatsCounter sc=auctMap.get(shwInHr);
-                if(sc==null)
-                {
-                    sc=new StatsCounter();
-                    auctMap.put(shwInHr,sc);
-                }
-                sc.addAucs(shwInHr,uc.getAucs());
-                sc.addImps(shwInHr,uc.getImps());
-                sc.addClicks(shwInHr,uc.getClicks());
-                sc.addConvs(shwInHr,uc.getConvs());
-                sc.addBids(shwInHr,uc.getBids());
-                sc.addWinPercentage(uc.getWinPercent(),1);
-                sc.addBidPercentage(uc.getBidPercent(),1);
-            }
-            //System.out.println(key+"..>"+c.toString());
-        }
-        //Add All conversions
-        Iterator<String> auctMapIter=auctMap.keySet().iterator();
-        while(auctMapIter.hasNext())
-        {
-            String segment=auctMapIter.next();
-            Iterator<ShoppingWindow> shwlIter=shwl.iterator();
-            while(shwlIter.hasNext())
+                sc=m2.get(m1Key);
+            }else
             {
-                ShoppingWindow shw=shwlIter.next();
-                if(shw.shwhr<=Integer.parseInt(segment))
-                {
-                    StatsCounter sc=auctMap.get(segment);
-                    sc.addAllConvs(segment,1);
-                }
+                sc=new StatsCounter();
             }
+            sc.addAucs(m1Key,m1Sc.mAucs);
+            sc.addImps(m1Key,m1Sc.mImps);
+            sc.addClicks(m1Key,m1Sc.mClicks);
+            sc.addConvs(m1Key,m1Sc.mConvs);
+            sc.addAllConvs(m1Key,m1Sc.mAllConvs);
+            sc.addUniques(m1Key,m1Sc.mUniques);
+            sc.addBids(m1Key,m1Sc.mBids);
+            
+            Iterator<Double> winIter=m1Sc.mWinPercent.keySet().iterator();
+            while(winIter.hasNext())
+            {
+                Double threshold=winIter.next();
+                sc.addWinPercentage(threshold,m1Sc.mWinPercent.get(threshold));
+            }
+
+            Iterator<Double> bidIter=m1Sc.mBidPercent.keySet().iterator();
+            while(bidIter.hasNext())
+            {
+                Double threshold=bidIter.next();
+                sc.addBidPercentage(threshold,m1Sc.mBidPercent.get(threshold));
+            }
+
+            m2.put(m1Key,sc);
         }
-        return getAuctHistAsJsonString(auctMap);
+        return m2;
     }
 
     public static String getAuctHistAsJsonString(HashMap<String,StatsCounter> auctMap)
@@ -435,89 +498,14 @@ public class MinprocParser
         return bidLs.toString();
     }
 
-    public static String getBidLandScapeAsJsonString(HashMap<String,StatsCounter> bidMap)
-    {
-        if(bidMap==null)
-            return null;
-        Iterator<String> bidMapKeyIter=bidMap.keySet().iterator();
-        JsonNodeFactory nf=JsonNodeFactory.instance;
-        ArrayNode bidLs=new ArrayNode(nf);
-        while(bidMapKeyIter.hasNext())
-        {
-            String bidPrice=bidMapKeyIter.next();
-            StatsCounter sc=bidMap.get(bidPrice);
-            ObjectNode data=sc.toJson();
-            data.put("advid:bidprice",bidPrice);
-            String s[]=bidPrice.split(":");
-            data.put("advid",s[0]);
-            data.put("bidprice",s[1]);
-            bidLs.add(data);
-        }
-        return bidLs.toString();
-    }
 
-    public static String getBidLandScapeAsJsonString(byte[] minproc,byte[] rtb)
-    {
-        HashMap<String,URIDCounter> procMap=MinprocParser.getAdvIdAndBids(minproc);
-        HashMap<String,URIDCounter> userLs=RtbParser.getAdvIdAndBids(rtb,procMap);
-        if(procMap==null || userLs==null)
-        {
-            return "";
-        }
-
-        HashMap<String,StatsCounter> bidMap=new HashMap<String,StatsCounter>();
-        Iterator<String> keyIter=userLs.keySet().iterator();
-        while(keyIter.hasNext())
-        {
-            String key=keyIter.next();
-            URIDCounter uc=userLs.get(key);
-            //System.out.println(key+"..>"+uc.toString());
-            String bidString=((uc.getWinningBidPrice()==null)?uc.getBidPrice():uc.getWinningBidPrice());
-            /*
-            if(uc.getWinningBidPrice()!=null)
-            {
-                System.out.println("BidPrice="+uc.getBidPrice()+" WinPrice="+uc.getWinningBidPrice());
-            }
-            */
-            StatsCounter sc=bidMap.get(bidString);
-            if(sc==null)
-            {
-                sc=new StatsCounter();
-                bidMap.put(bidString,sc);
-            }
-            String segment=String.valueOf(uc.getDayPart());
-            sc.addAucs(segment,uc.getAucs());
-            sc.addImps(segment,uc.getImps());
-            sc.addClicks(segment,uc.getClicks());
-            sc.addConvs(segment,uc.getConvs());
-            sc.addBids(segment,uc.getBids());
-            //System.out.println(key+"..>"+c.toString());
-        }
-        Iterator<String> bidMapKeyIter=bidMap.keySet().iterator();
-        JsonNodeFactory nf=JsonNodeFactory.instance;
-        ArrayNode bidLs=new ArrayNode(nf);
-        while(bidMapKeyIter.hasNext())
-        {
-            String bidPrice=bidMapKeyIter.next();
-            StatsCounter sc=bidMap.get(bidPrice);
-            ObjectNode data=sc.toJson();
-            data.put("advid:bidprice",bidPrice);
-            String s[]=bidPrice.split(":");
-            data.put("advid",s[0]);
-            data.put("bidprice",s[1]);
-            bidLs.add(data);
-        }
-        return bidLs.toString();
-    }
  
 	public static void main(String[] args) throws JsonParseException, IOException 
 	{
         byte[] minproc = null;
         byte[] rtb = null;
-        //String shwjson=new String("[{\"start\":1385518779,\"end\":1385534290,\"shwhr\":5},{\"start\":1386115146,\"end\":1386483059,\"shwhr\":103}]");
-        //String shwjson=new String("[{\"start\":1385488228,\"end\":1386927324,\"shwhr\":400}]");
-        //String shwjson=new String("[{\"start\":1386921282,\"end\":1386936595,\"shwhr\":5}]");
-        String shwjson=new String("[{\"start\":1385721390,\"end\":1385721629,\"shwhr\":1},{\"start\":1385993383,\"end\":1386179007,\"shwhr\":52},{\"start\":1387056093,\"end\":1387216706,\"shwhr\":45}]");
+        //String shwjson=new String("[{\"start\":1385721390,\"end\":1385721629,\"shwhr\":1},{\"start\":1385993383,\"end\":1386179007,\"shwhr\":52},{\"start\":1387056093,\"end\":1387216706,\"shwhr\":45}]");
+        String shwjson=new String("[{\"start\":1385894358,\"end\":1385896295,\"shwhr\":1}]");
         try
         {
             File minProcFile = new File("/tmp/minproc.json");
@@ -563,27 +551,17 @@ public class MinprocParser
             shwl.add(shw);
         }
 
-
-        /*
-        shw.start=1385518779;
-        shw.end=1385534290;
-        shw.shwhr=5;
-        shwl.add(shw);
-        shw=new ShoppingWindow();
-        shw.start=1386115146;
-        shw.end=1386483059;
-        shw.shwhr=103;
-        shwl.add(shw);
-        */
         List<Integer>  segments=new ArrayList<Integer>();
         segments.add(1);
+        segments.add(3);
         segments.add(5);
         segments.add(24);
         segments.add(48);
         segments.add(30*24);
 
-        //HashMap<String,StatsCounter> auctMap= getAuctionHistObject(minproc,rtb,30*24,shwl,null);
-        String auctLs=getAuctHistAsJsonString(minproc,rtb,segments,shwl);
+        HashMap<String,StatsCounter> auctMap= getAuctionHistObject(minproc,rtb,segments,shwl);
+        //String auctLs=getAuctHistAsJsonString(minproc,rtb,segments,shwl);
+        String auctLs=getAuctHistAsJsonString(auctMap);
         System.out.println(auctLs);
         
         //HashMap<String,StatsCounter> bidMap=getBidLandScapeObject(minproc,rtb,null);

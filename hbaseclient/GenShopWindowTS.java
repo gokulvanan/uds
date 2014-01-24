@@ -7,6 +7,7 @@ import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
@@ -34,7 +35,7 @@ public class GenShopWindowTS {
 
     Scan s = new Scan();
     s.addColumn(Bytes.toBytes("r"), Bytes.toBytes("dcojson"));
-    //s.addColumn(Bytes.toBytes("m"), Bytes.toBytes("shw"));
+    s.addColumn(Bytes.toBytes("m"), Bytes.toBytes("tshw"));
     ResultScanner scanner = table.getScanner(s);
     try 
     {
@@ -55,13 +56,20 @@ public class GenShopWindowTS {
                     if(shw!=null && !shw.isEmpty())
                     {
                         Put p = new Put(r.getRow());
-                        p.add(Bytes.toBytes("m"), Bytes.toBytes("shw"),Bytes.toBytes(shw));
+                        p.add(Bytes.toBytes("m"), Bytes.toBytes("tshw"),Bytes.toBytes(shw));
                         table.put(p);
                         rownum++;
                         System.out.println(Bytes.toString(r.getRow())+" : "+ shw);
                     }else
                     {
                         System.out.println(Bytes.toString(r.getRow())+" shw is empty");
+                        if(r.containsColumn(Bytes.toBytes("m"),Bytes.toBytes("tshw")))
+                        {
+                            Delete d=new Delete(r.getRow());
+                            d.deleteColumn(Bytes.toBytes("m"), Bytes.toBytes("tshw"));
+                            table.delete(d);
+                            System.out.println("Deleting tsw for "+Bytes.toString(r.getRow()));
+                        }
                     }
                 }else
                 {
