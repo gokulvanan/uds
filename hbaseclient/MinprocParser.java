@@ -25,6 +25,7 @@ public class MinprocParser
 /*
 {"region":17,"isLearning":0,"aggregatorId":6,"bids":[{"bidAmount":0.001612715,"creativeHeight":72,"creativeWidth":100,"advId":6006,"matchingUserSegmentId":2010494,"advIoId":11286,"matchingPageCategoryId":10303,"advLiId":19772}],"pageCategories":[{"categoryId":10303,"categoryWeight":0.0}],"learningPercentage":0.2364742504,"foldPosition":1,"country":100,"city":21,"timestamp":1387020021,"urid":"0ae1a26d08e52f211b86a6e06b442ec950bdc5d569ba9aba46087","siteId":3513,"eligibleLisByType":[{"eligibleLis":[{"eligibleLiId":19772}],"eligibleLiType":2},{"eligibleLis":[],"eligibleLiType":1}],"bidInfoListSize":1,"invalidLL":0,"userCookie":"0010a674-c2db-4b49-be2e-694a64a20da6}
 */
+    /*
     public static HashMap getAdvIdAndBids(File f)
     {
         byte[] rawData = new byte[(int) f.length()];
@@ -141,12 +142,6 @@ public class MinprocParser
             URIDCounter uc=userLs.get(key);
             //System.out.println(key+"..>"+uc.toString());
             String bidString=((uc.getWinningBidPrice()==null)?uc.getBidPrice():uc.getWinningBidPrice());
-            /*
-            if(uc.getWinningBidPrice()!=null)
-            {
-                System.out.println("BidPrice="+uc.getBidPrice()+" WinPrice="+uc.getWinningBidPrice());
-            }
-            */
             StatsCounter sc=bidMap.get(bidString);
             if(sc==null)
             {
@@ -203,12 +198,10 @@ public class MinprocParser
             URIDCounter uc=userLs.get(key);
             //System.out.println(key+"..>"+uc.toString());
             String bidString=((uc.getWinningBidPrice()==null)?uc.getBidPrice():uc.getWinningBidPrice());
-            /*
-            if(uc.getWinningBidPrice()!=null)
-            {
-                System.out.println("BidPrice="+uc.getBidPrice()+" WinPrice="+uc.getWinningBidPrice());
-            }
-            */
+            //if(uc.getWinningBidPrice()!=null)
+            //{
+                //System.out.println("BidPrice="+uc.getBidPrice()+" WinPrice="+uc.getWinningBidPrice());
+            //}
             StatsCounter sc=bidMap.get(bidString);
             if(sc==null)
             {
@@ -239,6 +232,7 @@ public class MinprocParser
         }
         return bidLs.toString();
     }
+    */
 
     public static HashMap getAuctionHistogram(File f, List<Integer> tshwhr,List<ShoppingWindow> shwl)
     {
@@ -375,7 +369,6 @@ public class MinprocParser
             return auctMap;
         }
 
-        //String shwInHr=String.valueOf(tshwhr);
         Iterator<String> keyIter=userLs.keySet().iterator();
         while(keyIter.hasNext())
         {
@@ -403,11 +396,11 @@ public class MinprocParser
                     sc=new StatsCounter();
                     auctMap.put(segment,sc);
                 }
-                sc.addAucs(segment,uc.getAucs());
-                sc.addImps(segment,uc.getImps());
-                sc.addClicks(segment,uc.getClicks());
-                sc.addConvs(segment,uc.getConvs());
-                sc.addBids(segment,uc.getBids());
+                sc.addAucs(uc.getAucs());
+                sc.addImps(uc.getImps());
+                sc.addClicks(uc.getClicks());
+                sc.addConvs(uc.getConvs());
+                sc.addBids(uc.getBids());
             }
             //System.out.println(key+"..>"+c.toString());
         }
@@ -417,11 +410,13 @@ public class MinprocParser
         {
             String segment=auctMapIter.next();
             StatsCounter sc=auctMap.get(segment);
+            sc.setShwhr(segment);
             double winPercent=(double)sc.mImps/(double)sc.mBids;
             double bidPercent=(double)sc.mBids/(double)sc.mAucs;
             sc.addWinPercentage(winPercent,1);
             sc.addBidPercentage(bidPercent,1);
-            sc.addUniques(segment,1);
+            //sc.addUniques(segment,1);
+            sc.addUniques(1);
             Iterator<ShoppingWindow> shwlIter=shwl.iterator();
             while(shwlIter.hasNext())
             {
@@ -429,7 +424,7 @@ public class MinprocParser
                 if(shw.shwhr<=Integer.parseInt(segment))
                 {
                     sc=auctMap.get(segment);
-                    sc.addAllConvs(segment,1);
+                    sc.addAllConvs(1);
                 }
             }
         }
@@ -437,9 +432,9 @@ public class MinprocParser
     }
 
     //Merge two stats counter objects. Modifies m2 
-
     public static HashMap mergeStatsCounter(HashMap<String,StatsCounter> m1,HashMap<String,StatsCounter> m2)
     {
+        
         Iterator<String> m1Iter=m1.keySet().iterator();
         while(m1Iter.hasNext())
         {
@@ -453,6 +448,18 @@ public class MinprocParser
             {
                 sc=new StatsCounter();
             }
+            sc.addAucs(m1Sc.mAucs);
+            sc.addImps(m1Sc.mImps);
+            sc.addClicks(m1Sc.mClicks);
+            sc.addConvs(m1Sc.mConvs);
+            sc.addAllConvs(m1Sc.mAllConvs);
+            sc.addUniques(m1Sc.mUniques);
+            sc.addBids(m1Sc.mBids);
+            if(sc.mShwhr==null && m1Sc.mShwhr!=null)
+            {
+                sc.setShwhr(m1Sc.mShwhr);
+            }
+            /* 
             sc.addAucs(m1Key,m1Sc.mAucs);
             sc.addImps(m1Key,m1Sc.mImps);
             sc.addClicks(m1Key,m1Sc.mClicks);
@@ -460,6 +467,7 @@ public class MinprocParser
             sc.addAllConvs(m1Key,m1Sc.mAllConvs);
             sc.addUniques(m1Key,m1Sc.mUniques);
             sc.addBids(m1Key,m1Sc.mBids);
+            */
             
             Iterator<Double> winIter=m1Sc.mWinPercent.keySet().iterator();
             while(winIter.hasNext())
@@ -492,7 +500,7 @@ public class MinprocParser
             String shwhr=auctMapKeyIter.next();
             StatsCounter sc=auctMap.get(shwhr);
             ObjectNode data=sc.toJson();
-            data.put("shwhr",shwhr);
+            //data.put("shwhr",shwhr);
             bidLs.add(data);
         }
         return bidLs.toString();
@@ -502,10 +510,12 @@ public class MinprocParser
  
 	public static void main(String[] args) throws JsonParseException, IOException 
 	{
-        byte[] minproc = null;
-        byte[] rtb = null;
+        byte[] minproc = null,minproc1=null;
+        byte[] rtb = null,rtb1=null;
         //String shwjson=new String("[{\"start\":1385721390,\"end\":1385721629,\"shwhr\":1},{\"start\":1385993383,\"end\":1386179007,\"shwhr\":52},{\"start\":1387056093,\"end\":1387216706,\"shwhr\":45}]");
-        String shwjson=new String("[{\"start\":1385894358,\"end\":1385896295,\"shwhr\":1}]");
+        //String shwjson=new String("[{\"start\":1385894358,\"end\":1385896295,\"shwhr\":1}]");
+        String shwjson=new String("[{\"start\":1385518779,\"end\":1385534290,\"shwhr\":5},{\"start\":1386115146,\"end\":1386483059,\"shwhr\":103}]");
+        String shwjson1=new String("[{\"start\":1385721390,\"end\":1385721629,\"shwhr\":1},{\"start\":1385993383,\"end\":1386179007,\"shwhr\":52},{\"start\":1387056093,\"end\":1387216706,\"shwhr\":45}]");
         try
         {
             File minProcFile = new File("/tmp/minproc.json");
@@ -516,15 +526,28 @@ public class MinprocParser
             DataInputStream dis = new DataInputStream(new FileInputStream(minProcFile));
             dis.readFully(minproc);
             dis.close();
-
             dis = new DataInputStream(new FileInputStream(rtbFile));
             dis.readFully(rtb);
             dis.close();
+
+            File minProc1File = new File("/tmp/minproc1.json");
+            File rtb1File = new File("/tmp/rtb1.json");
+            minproc1 = new byte[(int) minProc1File.length()];
+            rtb1 = new byte[(int) rtb1File.length()];
+
+            dis = new DataInputStream(new FileInputStream(minProc1File));
+            dis.readFully(minproc1);
+            dis.close();
+            dis = new DataInputStream(new FileInputStream(rtb1File));
+            dis.readFully(rtb1);
+            dis.close();
+
 
         }catch(Exception e)
         {
             System.out.println(e.getMessage());
         }
+
         List<ShoppingWindow> shwl=new ArrayList<ShoppingWindow>();
         ObjectMapper objectMapper = new ObjectMapper();
         JsonNode rootNode=null;
@@ -551,6 +574,31 @@ public class MinprocParser
             shwl.add(shw);
         }
 
+        List<ShoppingWindow> shwl1=new ArrayList<ShoppingWindow>();
+        rootNode=null;
+        //read JSON like DOM Parser
+        try
+        {
+            rootNode = objectMapper.readTree(shwjson1);
+        }catch(java.io.IOException e)
+        {
+            System.out.println(e.getMessage());
+        }
+
+        records=rootNode.getElements(); 
+        while(records.hasNext())
+        {
+            JsonNode record = records.next();
+            long start=record.path("start").getLongValue();
+            long end=record.path("end").getLongValue();
+            int shwhr=record.path("shwhr").getIntValue();
+            ShoppingWindow shw=new ShoppingWindow();
+            shw.start=start;
+            shw.end=end;
+            shw.shwhr=shwhr;
+            shwl1.add(shw);
+        }
+
         List<Integer>  segments=new ArrayList<Integer>();
         segments.add(1);
         segments.add(3);
@@ -560,9 +608,21 @@ public class MinprocParser
         segments.add(30*24);
 
         HashMap<String,StatsCounter> auctMap= getAuctionHistObject(minproc,rtb,segments,shwl);
+        HashMap<String,StatsCounter> auctMap1= getAuctionHistObject(minproc1,rtb1,segments,shwl1);
         //String auctLs=getAuctHistAsJsonString(minproc,rtb,segments,shwl);
         String auctLs=getAuctHistAsJsonString(auctMap);
+        System.out.println("----hist1----");
         System.out.println(auctLs);
+        System.out.println("----hist1----");
+        String auctLs1=getAuctHistAsJsonString(auctMap1);
+        System.out.println("----hist2----");
+        System.out.println(auctLs1);
+        System.out.println("----hist2----");
+        HashMap<String,StatsCounter> overallAuct=new HashMap<String,StatsCounter>(); 
+        overallAuct=mergeStatsCounter(auctMap,overallAuct);
+        overallAuct=mergeStatsCounter(auctMap1,overallAuct);
+        System.out.println(getAuctHistAsJsonString(overallAuct));
+
         
         //HashMap<String,StatsCounter> bidMap=getBidLandScapeObject(minproc,rtb,null);
         //String bls=getBidLandScapeAsJsonString(bidMap);

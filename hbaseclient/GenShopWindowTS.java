@@ -36,11 +36,11 @@ public class GenShopWindowTS {
     Scan s = new Scan();
     s.addColumn(Bytes.toBytes("r"), Bytes.toBytes("dcojson"));
     s.addColumn(Bytes.toBytes("m"), Bytes.toBytes("tshw"));
+    s.addColumn(Bytes.toBytes("m"), Bytes.toBytes("shw"));
     ResultScanner scanner = table.getScanner(s);
     try 
     {
         int rownum=0;
-        HashMap<String,StatsCounter> overallBidLs=null;
         for (Result r : scanner) 
         {
             //System.out.println("Row-->"+Bytes.toString(r.getRow()));

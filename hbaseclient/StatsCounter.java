@@ -1,56 +1,64 @@
 package procstats;
-import java.io.*;
 import java.util.*;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.Set;
+import java.util.Iterator;
+import java.util.HashMap;
+import java.util.List;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.text.DecimalFormat;
+
+import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.node.JsonNodeFactory;
 import org.codehaus.jackson.node.ObjectNode;
 import org.codehaus.jackson.node.ArrayNode;
+import org.codehaus.jackson.map.ObjectMapper;
+import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.JsonParseException;
+import org.codehaus.jackson.JsonParser;
+import org.codehaus.jackson.JsonToken;
 public class StatsCounter 
 {
     //A simple structure to segment the stats according to any criteria
     //The overall stats then is just a sum over all Stats Structure
-    public class Stats
-    {
-        public String mSegment;
-        public int mImps,mClicks,mConvs,mBids,mAucs,mAllConvs,mUniques;
-        public Stats(String segment)
-        {
-            mImps=mClicks=mConvs=mBids=mAucs=mAllConvs=mUniques=0;
-            mSegment=new String(segment);
-        }
-        public String toString()
-        {
-            return "segment="+mSegment+"Auctions="+String.valueOf(mAucs)+" Bids="+String.valueOf(mBids)+" Imps="+String.valueOf(mImps)+" Clicks="+String.valueOf(mClicks)+" Conversions="+String.valueOf(mConvs);
-        }
-    }
     //This is overall impressions, clicks, conversions, bids and auctions
     public int mImps,mClicks,mConvs,mBids,mAucs,mAllConvs,mUniques;
-    HashMap<String,Stats> mStatsMap;
     public HashMap<Double,Integer> mWinPercent;
     public HashMap<Double,Integer> mBidPercent;
+    public HashMap<Double,Integer> mWinningBidPrice;
+    ArrayList<Double> mPercentKey;
+    public String mShwhr;  
+    //HashMap<String,Stats> mStatsMap;
+
     public StatsCounter()
     {
-        mStatsMap=new HashMap<String,Stats>();
+        //mStatsMap=new HashMap<String,Stats>();
+        mShwhr=null;
         mImps=mClicks=mConvs=mBids=mAucs=mAllConvs=mUniques=0;
+        mPercentKey=new ArrayList<Double>();
+        mPercentKey.add(new Double(0.0));
+        mPercentKey.add(new Double(0.05));
+        mPercentKey.add(new Double(0.10));
+        mPercentKey.add(new Double(0.25));
+        mPercentKey.add(new Double(0.75));
+        mPercentKey.add(new Double(1.0));
         mWinPercent=new HashMap<Double,Integer>();
         mBidPercent=new HashMap<Double,Integer>();
-        mWinPercent.put(new Double(0.0),new Integer(0));    //Count of 0 win percentages
-        mWinPercent.put(new Double(0.05),new Integer(0));    //Count of 0 win percentages
-        mWinPercent.put(0.10,0);    //Count of <=10 win percentages
-        mWinPercent.put(0.25,0);    //Count of <=25 win percentages
-        mWinPercent.put(0.75,0);    //Count of <=25 win percentages
-        mWinPercent.put(1.0,0);    //Count of <=100 win percentages
-
-        mBidPercent.put(0.0,0);    //Count of 0 bid percentages
-        mBidPercent.put(0.05,0);    //Count of <=5 bid percentages
-        mBidPercent.put(0.10,0);    //Count of <=10 bid percentages
-        mBidPercent.put(0.25,0);    //Count of <=25 bid percentages
-        mBidPercent.put(0.75,0);    //Count of <=25 bid percentages
-        mBidPercent.put(1.0,0);    //Count of <=100 bid percentages
+        Iterator<Double> percentIter=mPercentKey.iterator();
+        while(percentIter.hasNext())
+        {
+            Double percent=percentIter.next();
+            mWinPercent.put(percent,0);
+            mBidPercent.put(percent,0);
+        }
     }
     public void addWinPercentage(double winPercent,int cnt)
     {
         //System.out.println("win%="+winPercent);
-        Iterator<Double> winIter=mWinPercent.keySet().iterator();
+        Iterator<Double> winIter=mPercentKey.iterator();
         while(winIter.hasNext())
         {
             Double threshold=winIter.next();
@@ -65,7 +73,7 @@ public class StatsCounter
     public void addBidPercentage(double bidPercent,int cnt)
     {
         //System.out.println("Bid%="+bidPercent);
-        Iterator<Double> bidIter=mBidPercent.keySet().iterator();
+        Iterator<Double> bidIter=mPercentKey.iterator();
         while(bidIter.hasNext())
         {
             Double threshold=bidIter.next();
@@ -77,101 +85,94 @@ public class StatsCounter
             }
         }
     }
-    public void addBids(String segment,int cnt)
+    public void addBids(int cnt)
     {
-        Stats s=mStatsMap.get(segment);
-        if(s==null)
-        {
-            s=new Stats(segment);
-            mStatsMap.put(s.mSegment,s);
-        }
-        s.mBids+=cnt;
         mBids+=cnt;
     }
-    public void addUniques(String segment,int cnt)
+    public void addUniques(int cnt)
     {
-        Stats s=mStatsMap.get(segment);
-        if(s==null)
-        {
-            s=new Stats(segment);
-            mStatsMap.put(s.mSegment,s);
-        }
-        s.mUniques+=cnt;
         mUniques+=cnt;
     }
-    public void addImps(String segment,int cnt)
+    public void addImps(int cnt)
     {
-        Stats s=mStatsMap.get(segment);
-        if(s==null)
-        {
-            s=new Stats(segment);
-            mStatsMap.put(s.mSegment,s);
-        }
-        s.mImps+=cnt;
         mImps+=cnt;
     }
-    public void addClicks(String segment,int cnt)
+    public void addClicks(int cnt)
     {
-        Stats s=mStatsMap.get(segment);
-        if(s==null)
-        {
-            s=new Stats(segment);
-            mStatsMap.put(s.mSegment,s);
-        }
-        s.mClicks+=cnt;
-        mClicks+=cnt;
+       mClicks+=cnt;
     }
-    public void addAucs(String segment,int cnt)
+    public void addAucs(int cnt)
     {
-        Stats s=mStatsMap.get(segment);
-        if(s==null)
-        {
-            s=new Stats(segment);
-            mStatsMap.put(s.mSegment,s);
-        }
-        s.mAucs+=cnt;
         mAucs+=cnt;
     }
-    public void addAllConvs(String segment,int cnt)
+    public void addAllConvs(int cnt)
     {
-        Stats s=mStatsMap.get(segment);
-        if(s==null)
-        {
-            s=new Stats(segment);
-            mStatsMap.put(s.mSegment,s);
-        }
-        s.mAllConvs+=cnt;
         mAllConvs+=cnt;
     }
-    public void addConvs(String segment,int cnt)
+    public void addConvs(int cnt)
     {
-        Stats s=mStatsMap.get(segment);
-        if(s==null)
-        {
-            s=new Stats(segment);
-            mStatsMap.put(s.mSegment,s);
-        }
-        s.mConvs+=cnt;
         mConvs+=cnt;
     }
-    public Set<String> getSegments()
+    public void setShwhr(String shwhr)
     {
-        return mStatsMap.keySet();
+        mShwhr=new String(shwhr);
     }
 
-    public static StatsCounter fromJson(byte[] rawdata)
+
+    public static HashMap<String,StatsCounter> fromJson(byte[] rawData)
     {
-        String auctJson=null;
+        HashMap<String,StatsCounter> ret=new HashMap<String,StatsCounter>();
+        ObjectMapper objectMapper = new ObjectMapper();
+ 
+        JsonNode rootNode ;
+        //read JSON like DOM Parser
         try
         {
             CharsetDecoder utf8Decoder = Charset.forName("UTF-8").newDecoder();
-            String auctJson=utf8Decoder.decode(ByteBuffer.wrap(rawData)).toString();
-            return getAuctionHistogram(minProcJsonData,tshwhr,shwl);
-        }catch(Exception e)
+            String jsonData=utf8Decoder.decode(ByteBuffer.wrap(rawData)).toString();
+            rootNode = objectMapper.readTree(jsonData);
+        }catch(java.io.IOException e)
         {
             System.out.println(e.getMessage());
+            return null;
         }
-
+        System.out.println("Iterating over elements");
+        Iterator<JsonNode> records=rootNode.getElements(); 
+        while(records.hasNext())
+        {
+            StatsCounter sc=new StatsCounter();
+            JsonNode record = records.next();
+            sc.mAllConvs=record.path("allconvs").getIntValue();
+            sc.mConvs=record.path("convs").getIntValue();
+            sc.mClicks=record.path("clicks").getIntValue();
+            sc.mImps=record.path("imps").getIntValue();
+            sc.mBids=record.path("bids").getIntValue();
+            sc.mAucs=record.path("aucs").getIntValue();
+            sc.mUniques=record.path("uniques").getIntValue();
+            Iterator<JsonNode> elements=record.path("WinBidPercent").getElements();
+            while(elements.hasNext())
+            {
+                JsonNode winBidPercent = elements.next();
+                //System.out.println(winBidPercent);
+                if(winBidPercent.path("winPercent").isMissingNode())
+                {
+                    //If Winpercent is mising then BidPercent will be present
+                    Double bidPercent=new Double(winBidPercent.path("bidPercent").getDoubleValue());
+                    Integer bidCount=new Integer(winBidPercent.path("bidCount").getIntValue());
+                    sc.mBidPercent.put(bidPercent,bidCount);
+                    //System.out.println("bidPercent="+bidPercent+" bidCnt="+bidCount);
+                }else
+                {
+                    Double winPercent=new Double(winBidPercent.path("winPercent").getDoubleValue());
+                    Integer winCount=new Integer(winBidPercent.path("winCount").getIntValue());
+                    sc.mWinPercent.put(winPercent,winCount);
+                    //System.out.println("winPercent="+winPercent+" winCnt="+winCount);
+                }
+            }
+            sc.setShwhr(record.path("shwhr").getTextValue());
+            ret.put(sc.mShwhr,sc);
+        }
+        return ret;
     }
 
     public ObjectNode toJson()
@@ -188,7 +189,7 @@ public class StatsCounter
             all.put("aucs",mAucs);
             all.put("uniques",mUniques);
             ArrayNode winNodes=new ArrayNode(nf);
-            Iterator<Double> winIter=mWinPercent.keySet().iterator();
+            Iterator<Double> winIter=mPercentKey.iterator();
             while(winIter.hasNext())
             {
                 Double winPercent=winIter.next();
@@ -198,8 +199,7 @@ public class StatsCounter
                 winCountN.put("winCount",winCount);
                 winNodes.add(winCountN);
             }
-
-            Iterator<Double> bidIter=mBidPercent.keySet().iterator();
+            Iterator<Double> bidIter=mPercentKey.iterator();
             while(bidIter.hasNext())
             {
                 Double bidPercent=bidIter.next();
@@ -210,26 +210,11 @@ public class StatsCounter
                 winNodes.add(bidCountN);
             }
             all.put("WinBidPercent",winNodes);
-            
-            /*
-            Iterator<String> keyIter=mStatsMap.keySet().iterator();
-            ArrayNode daypart=new ArrayNode(nf);
-            while(keyIter.hasNext())
+            if(mShwhr!=null && mShwhr.length()>0)
             {
-                String key=keyIter.next();
-                ObjectNode segmentNode=nf.objectNode();
-                Stats s=mStatsMap.get(key);
-                segmentNode.put("convs",s.mConvs);
-                segmentNode.put("clicks",s.mClicks);
-                segmentNode.put("imps",s.mImps);
-                segmentNode.put("bids",s.mBids);
-                segmentNode.put("aucs",s.mAucs);
-                segmentNode.put("daypart",key);
-                daypart.add(segmentNode);
-                //System.out.println(segmentJsonString);
+                all.put("shwhr",mShwhr);
             }
-            all.put("daypart",daypart);
-            */
+            
             return all;
         }catch(Exception ex)
         {
@@ -237,20 +222,29 @@ public class StatsCounter
             return null;
         }
     }
-    public String toString()
-    {
-        int clicks,imps,aucs,convs,bids;
-        clicks=imps=aucs=convs=bids=0;
-        Iterator<String> keyIter=mStatsMap.keySet().iterator();
-        while(keyIter.hasNext())
+	public static void main(String[] args) throws JsonParseException, IOException 
+	{
+        byte[] tAuctHist = null;
+        byte[] tAuctHist1 = null;
+        try
         {
-            Stats s=mStatsMap.get(keyIter.next());
-            clicks+=s.mClicks;
-            imps+=s.mImps;
-            convs+=s.mConvs;
-            aucs+=s.mAucs;
-            bids+=s.mBids;
+            File tAuctHistFile = new File("/tmp/tauctHist.json");
+            File tAuctHistFile1 = new File("/tmp/tauctHist1.json");
+            tAuctHist= new byte[(int) tAuctHistFile.length()];
+            tAuctHist1= new byte[(int) tAuctHistFile1.length()];
+            DataInputStream dis = new DataInputStream(new FileInputStream(tAuctHistFile));
+            dis.readFully(tAuctHist);
+            dis.close();
+
+            dis = new DataInputStream(new FileInputStream(tAuctHistFile1));
+            dis.readFully(tAuctHist1);
+            dis.close();
+        }catch(Exception e)
+        {
+            System.out.println(e.getMessage());
         }
-        return "Auctions="+String.valueOf(aucs)+" Bids="+String.valueOf(bids)+" Imps="+String.valueOf(imps)+" Clicks="+String.valueOf(clicks)+" Conversions="+String.valueOf(convs);
+
+        HashMap<String,StatsCounter> auctMap=fromJson(tAuctHist);
+        System.out.println(MinprocParser.getAuctHistAsJsonString(auctMap));
     }
 }
